@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cari Harga Barang</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#c0632b">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#fdfaf5; --card:#ffffff; --ink:#2b2620; --sub:#6b6258;
+    --accent:#c0632b; --accent-ink:#ffffff; --line:#e9e0d3; --danger:#b3402f;
+    box-sizing:border-box;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#1c1814; --card:#26211b; --ink:#f2ebe1; --sub:#b9ada0;
+      --accent:#e08a4f; --accent-ink:#241a10; --line:#3a332a; --danger:#e0685a;
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    min-height:100vh;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  header{
+    position:sticky; top:0; z-index:5;
+    padding:calc(16px + env(safe-area-inset-top,0px)) 16px 14px;
+    background:var(--accent); color:var(--accent-ink);
+  }
+  header h1{margin:0 0 12px; font-size:1.3rem;}
+  .search-wrap{position:relative;}
+  #search{
+    width:100%; padding:16px 16px 16px 44px; font-size:1.15rem;
+    border:none; border-radius:14px; background:#fff; color:#2b2620;
+  }
+  .search-icon{position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:1.2rem;}
+  main{padding:16px; max-width:640px; margin:0 auto;}
+  .empty{text-align:center; color:var(--sub); padding:40px 20px; font-size:1.05rem;}
+  .item{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px; margin-bottom:12px; display:flex; justify-content:space-between;
+    align-items:center; gap:10px;
+  }
+  .item .name{font-size:1.15rem; font-weight:600;}
+  .item .meta{font-size:0.9rem; color:var(--sub); margin-top:2px;}
+  .item .price{font-size:1.25rem; font-weight:700; color:var(--accent); white-space:nowrap;}
+  .item .del{
+    background:none; border:none; color:var(--danger); font-size:1.3rem;
+    padding:4px 8px; cursor:pointer; line-height:1;
+  }
+  .fab{
+    position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom,0px));
+    width:60px; height:60px; border-radius:50%; background:var(--accent); color:var(--accent-ink);
+    border:none; font-size:2rem; box-shadow:0 4px 14px rgba(0,0,0,.25); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.45); display:none;
+    align-items:flex-end; z-index:20;
+  }
+  .overlay.show{display:flex;}
+  .sheet{
+    background:var(--bg); width:100%; border-radius:20px 20px 0 0;
+    padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));
+    max-height:88vh; overflow-y:auto;
+  }
+  .sheet h2{margin-top:0;}
+  label{display:block; margin:14px 0 6px; font-weight:600; font-size:0.95rem;}
+  input[type=text], input[type=number]{
+    width:100%; padding:13px 14px; font-size:1.05rem; border-radius:10px;
+    border:1px solid var(--line); background:var(--card); color:var(--ink);
+  }
+  .row-btns{display:flex; gap:10px; margin-top:20px;}
+  .row-btns button{
+    flex:1; padding:14px; font-size:1.05rem; border-radius:12px; border:none; cursor:pointer;
+  }
+  .btn-save{background:var(--accent); color:var(--accent-ink); font-weight:700;}
+  .btn-cancel{background:var(--card); color:var(--ink); border:1px solid var(--line) !important;}
+  .count{font-size:0.85rem; color:var(--sub); margin:0 0 10px;}
+  .bulk-link{
+    margin-top:10px; background:rgba(255,255,255,.22); color:var(--accent-ink);
+    border:none; padding:9px 14px; border-radius:10px; font-size:0.9rem; cursor:pointer;
+  }
+  textarea#bulk-text{
+    width:100%; min-height:160px; padding:13px 14px; font-size:1rem; border-radius:10px;
+    border:1px solid var(--line); background:var(--card); color:var(--ink); font-family:inherit;
+    resize:vertical;
+  }
+  .hint{font-size:0.85rem; color:var(--sub); margin:8px 0 0; line-height:1.5;}
+  .bulk-result{font-size:0.9rem; margin-top:10px; color:var(--sub);}
+  .excel-row{display:flex; gap:8px; margin-top:8px;}
+  .excel-row button{
+    flex:1; background:rgba(255,255,255,.22); color:var(--accent-ink);
+    border:none; padding:9px 10px; border-radius:10px; font-size:0.85rem; cursor:pointer;
+  }
+  #file-import{display:none;}
+  .toast{
+    position:fixed; left:50%; bottom:100px; transform:translateX(-50%);
+    background:var(--ink); color:var(--bg); padding:12px 18px; border-radius:12px;
+    font-size:0.95rem; max-width:85%; text-align:center; z-index:40; opacity:0;
+    transition:opacity .25s; pointer-events:none;
+  }
+  .toast.show{opacity:1;}
+  .offline-badge{
+    display:none; background:rgba(0,0,0,.25); color:var(--accent-ink); font-size:0.8rem;
+    padding:4px 10px; border-radius:8px; margin-top:8px;
+  }
+  .offline-badge.show{display:inline-block;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔍 Cari Harga Barang</h1>
+  <div class="search-wrap">
+    <span class="search-icon">🔎</span>
+    <input id="search" type="text" placeholder="Ketik nama barang..." autocomplete="off">
+  </div>
+  <button class="bulk-link" onclick="openBulk()">📋 Tambah banyak sekaligus</button>
+  <div class="excel-row">
+    <button onclick="exportExcel()">📤 Ekspor Excel</button>
+    <button onclick="document.getElementById('file-import').click()">📥 Impor Excel</button>
+  </div>
+  <input type="file" id="file-import" accept=".xlsx,.xls,.csv" onchange="importExcel(this.files[0])">
+  <span class="offline-badge" id="offline-badge">📴 Mode offline</span>
+</header>
+
+<div class="toast" id="toast"></div>
+
+<main>
+  <p class="count" id="count"></p>
+  <div id="list"></div>
+</main>
+
+<button class="fab" onclick="openSheet()">＋</button>
+
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet">
+    <h2>Tambah Barang</h2>
+    <label>Nama Barang</label>
+    <input id="f-name" type="text" placeholder="cth: Minyak Goreng 1L">
+    <label>Harga (Rp)</label>
+    <input id="f-price" type="number" inputmode="numeric" placeholder="cth: 18500">
+    <label>Satuan / Keterangan (opsional)</label>
+    <input id="f-unit" type="text" placeholder="cth: per botol, dari nota Toko Jaya">
+    <div class="row-btns">
+      <button class="btn-cancel" onclick="closeSheet()">Batal</button>
+      <button class="btn-save" onclick="saveItem()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-bulk" onclick="if(event.target===this)closeBulk()">
+  <div class="sheet">
+    <h2>Tambah Banyak Sekaligus</h2>
+    <p class="hint">
+      Tulis atau tempel satu barang per baris, format:<br>
+      <b>nama barang, harga</b> atau <b>nama barang, harga, keterangan</b><br>
+      Contoh:<br>
+      Minyak Goreng 1L, 18500<br>
+      Beras 5kg, 65000, dari nota Toko Jaya<br>
+      Gula Pasir, 15000
+    </p>
+    <textarea id="bulk-text" placeholder="Minyak Goreng 1L, 18500&#10;Beras 5kg, 65000, dari nota Toko Jaya&#10;Gula Pasir, 15000"></textarea>
+    <div class="bulk-result" id="bulk-result"></div>
+    <div class="row-btns">
+      <button class="btn-cancel" onclick="closeBulk()">Batal</button>
+      <button class="btn-save" onclick="saveBulk()">Simpan Semua</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'cari-harga-items-v1';
+let items = [];
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    items = raw ? JSON.parse(raw) : [];
+  }catch(e){ items = []; }
+}
+function persist(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }
+  catch(e){ alert('Gagal menyimpan data di perangkat ini.'); }
+}
+function formatRp(n){
+  return 'Rp ' + Number(n).toLocaleString('id-ID');
+}
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function render(){
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const list = document.getElementById('list');
+
+  function matchScore(name){
+    const n = name.toLowerCase();
+    if(q === '') return 0;
+    if(n.startsWith(q)) return 2;
+    if(n.split(/\s+/).some(w => w.startsWith(q))) return 1;
+    if(n.includes(q)) return 0;
+    return -1;
+  }
+
+  const filtered = items
+    .map(it => ({ it, score: matchScore(it.name) }))
+    .filter(x => x.score > -1)
+    .sort((a,b) => b.score - a.score || a.it.name.localeCompare(b.it.name, 'id'))
+    .map(x => x.it);
+
+  document.getElementById('count').textContent =
+    items.length === 0 ? '' : `${filtered.length} dari ${items.length} barang`;
+
+  if(items.length === 0){
+    list.innerHTML = `<div class="empty">Belum ada barang.<br>Tekan tombol ＋ untuk menambah barang pertama.</div>`;
+    return;
+  }
+  if(filtered.length === 0){
+    list.innerHTML = `<div class="empty">Barang tidak ditemukan.</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(it => `
+    <div class="item">
+      <div>
+        <div class="name">${escapeHtml(it.name)}</div>
+        ${it.unit ? `<div class="meta">${escapeHtml(it.unit)}</div>` : ''}
+      </div>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <div class="price">${formatRp(it.price)}</div>
+        <button class="del" onclick="deleteItem('${it.id}')" aria-label="Hapus">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+function openSheet(){
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-price').value = '';
+  document.getElementById('f-unit').value = '';
+  document.getElementById('overlay').classList.add('show');
+}
+function closeSheet(){
+  document.getElementById('overlay').classList.remove('show');
+}
+function upsertItem(name, price, unit){
+  const key = name.trim().toLowerCase();
+  const existing = items.find(it => it.name.trim().toLowerCase() === key);
+  if(existing){
+    existing.price = price;
+    if(unit) existing.unit = unit;
+    return false;
+  }
+  items.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    name, price, unit
+  });
+  return true;
+}
+function saveItem(){
+  const name = document.getElementById('f-name').value.trim();
+  const price = document.getElementById('f-price').value;
+  const unit = document.getElementById('f-unit').value.trim();
+  if(!name){ alert('Nama barang belum diisi.'); return; }
+  if(price === '' || isNaN(price)){ alert('Harga belum diisi dengan benar.'); return; }
+  upsertItem(name, Number(price), unit);
+  persist();
+  closeSheet();
+  document.getElementById('search').value = '';
+  render();
+}
+function deleteItem(id){
+  if(!confirm('Hapus barang ini?')) return;
+  items = items.filter(it => it.id !== id);
+  persist();
+  render();
+}
+function openBulk(){
+  document.getElementById('bulk-text').value =
+    'Nama Barang 1, 0000, keterangan (opsional)\nNama Barang 2, 0000\nNama Barang 3, 0000';
+  document.getElementById('bulk-result').textContent = '';
+  document.getElementById('overlay-bulk').classList.add('show');
+  const ta = document.getElementById('bulk-text');
+  ta.focus();
+  ta.select();
+}
+function closeBulk(){
+  document.getElementById('overlay-bulk').classList.remove('show');
+}
+function saveBulk(){
+  const raw = document.getElementById('bulk-text').value;
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  let added = 0, updated = 0, skipped = 0;
+  lines.forEach(line => {
+    const parts = line.split(',').map(p => p.trim());
+    const name = parts[0];
+    const priceStr = (parts[1] || '').replace(/[^\d]/g, '');
+    const unit = parts.slice(2).join(', ');
+    if(!name || !priceStr){ skipped++; return; }
+    const isNew = upsertItem(name, Number(priceStr), unit);
+    if(isNew) added++; else updated++;
+  });
+  persist();
+  const resultEl = document.getElementById('bulk-result');
+  resultEl.textContent = `${added} barang baru ditambah, ${updated} barang diperbarui harganya.` + (skipped ? ` ${skipped} baris dilewati (format salah).` : '');
+  document.getElementById('bulk-text').value = '';
+  render();
+}
+document.getElementById('search').addEventListener('input', render);
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+function exportExcel(){
+  if(items.length === 0){ showToast('Belum ada barang untuk diekspor.'); return; }
+  if(typeof XLSX === 'undefined'){ showToast('Fitur Excel butuh koneksi internet sekali saat pertama dibuka.'); return; }
+  const rows = [['Nama Barang', 'Harga (Rp)', 'Keterangan']];
+  items.slice().sort((a,b) => a.name.localeCompare(b.name, 'id'))
+    .forEach(it => rows.push([it.name, it.price, it.unit || '']));
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:30},{wch:14},{wch:26}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Daftar Harga');
+  const wbout = XLSX.write(wb, {type:'array', bookType:'xlsx'});
+  const blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+
+  const stamp = new Date().toISOString().slice(0,10);
+  const filename = `daftar-harga-${stamp}.xlsx`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  showToast('File Excel diunduh. Tinggal dibagikan lewat WhatsApp/email.');
+}
+
+function importExcel(file){
+  if(!file) return;
+  if(typeof XLSX === 'undefined'){ showToast('Fitur Excel butuh koneksi internet sekali saat pertama dibuka.'); return; }
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+      if(rows.length === 0){ showToast('File kosong atau tidak terbaca.'); return; }
+
+      const header = rows[0].map(h => String(h).toLowerCase().trim());
+      let nameCol = header.findIndex(h => h.includes('nama'));
+      let priceCol = header.findIndex(h => h.includes('harga'));
+      let unitCol = header.findIndex(h => h.includes('keterangan') || h.includes('satuan'));
+      let startRow = 1;
+      if(nameCol === -1 || priceCol === -1){
+        nameCol = 0; priceCol = 1; unitCol = 2; startRow = 0;
+      }
+
+      let added = 0, updated = 0, skipped = 0;
+      for(let i = startRow; i < rows.length; i++){
+        const row = rows[i];
+        const name = String(row[nameCol] || '').trim();
+        const priceRaw = String(row[priceCol] || '').replace(/[^\d]/g, '');
+        const unit = unitCol >= 0 ? String(row[unitCol] || '').trim() : '';
+        if(!name || !priceRaw){ skipped++; continue; }
+        const isNew = upsertItem(name, Number(priceRaw), unit);
+        if(isNew) added++; else updated++;
+      }
+      persist();
+      render();
+      showToast(`${added} barang baru, ${updated} diperbarui.` + (skipped ? ` ${skipped} baris dilewati.` : ''));
+    }catch(err){
+      showToast('Gagal membaca file. Pastikan formatnya benar.');
+    }finally{
+      document.getElementById('file-import').value = '';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function updateOfflineBadge(){
+  document.getElementById('offline-badge').classList.toggle('show', !navigator.onLine);
+}
+window.addEventListener('online', updateOfflineBadge);
+window.addEventListener('offline', updateOfflineBadge);
+updateOfflineBadge();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+load();
+render();
+</script>
+</body>
+</html>
